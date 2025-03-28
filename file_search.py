@@ -448,14 +448,27 @@ class FileSearchWindow(QMainWindow):
 
     def load_saved_indexes(self):
         try:
-            with open('file_indexes.json', 'r') as f:
-                self.saved_indexes = json.load(f)
+            # For loading, we might want to prompt the user if no default file exists
+            if os.path.exists('file_indexes.json'):
+                with open('file_indexes.json', 'r', encoding='utf-8') as f:
+                    self.saved_indexes = json.load(f)
+            else:
+                self.saved_indexes = {}
         except FileNotFoundError:
             self.saved_indexes = {}
+        except Exception as e:
+            print(f"Error loading indexes: {str(e)}")
+            self.saved_indexes = {}
 
-    def save_indexes_to_file(self):
-        with open('file_indexes.json', 'w') as f:
-            json.dump(self.saved_indexes, f)
+
+    def save_indexes_to_file(self, filepath):
+        try:
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(self.saved_indexes, f, ensure_ascii=False)
+        except PermissionError:
+            raise Exception("Permission denied. Try running the app with elevated privileges or choose a different save location.")
+        except Exception as e:
+            raise Exception(f"Error writing to file: {str(e)}")
 
     def on_search(self):
         try:
@@ -492,16 +505,23 @@ class FileSearchWindow(QMainWindow):
         if not self.indexed_files or not self.indexed_directory:
             QMessageBox.warning(self, "Error", "Please create an index first")
             return
-        name, ok = QFileDialog.getSaveFileName(self, "Save Index", "", "Index Name")
-        if ok and name:
+        try:
+            # Use QFileDialog to get a proper file path
+            name, ok = QFileDialog.getSaveFileName(self, "Save Index", "file_indexes.json", "JSON Files (*.json)")
+            if not (ok and name):
+                return  # User canceled or no name provided
+        
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            self.saved_indexes[name] = {
+            self.saved_indexes[name] = {  # Use the full path as the key
                 'directory': self.indexed_directory,
                 'files': self.indexed_files,
                 'timestamp': timestamp
             }
-            self.save_indexes_to_file()
-            QMessageBox.information(self, "Save Complete", f"Index '{name}' saved")
+            self.save_indexes_to_file(name)  # Pass the chosen file path
+            QMessageBox.information(self, "Save Complete", f"Index saved to '{name}'")
+        except Exception as e:
+            QMessageBox.critical(self, "Save Error", f"Failed to save index: {str(e)}")
+            print(f"Save error: {str(e)}")
 
     def on_load_index(self):
         if not self.saved_indexes:
