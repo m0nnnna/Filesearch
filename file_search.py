@@ -8,9 +8,10 @@ import platform
 from datetime import datetime
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                              QLabel, QLineEdit, QPushButton, QListWidget, QListWidgetItem, QFileDialog, 
-                             QMessageBox, QGraphicsBlurEffect, QGraphicsOpacityEffect)
+                             QMessageBox, QGraphicsBlurEffect, QGraphicsOpacityEffect, QProgressBar)
 from PyQt6.QtGui import (QPainter, QLinearGradient, QColor, QBrush, QFont, QPalette, QPen, QPixmap, QRadialGradient)
-from PyQt6.QtCore import Qt, QRectF, QPropertyAnimation, QEasingCurve, QParallelAnimationGroup, QSequentialAnimationGroup, QPoint, QTimer
+from PyQt6.QtCore import Qt, QRectF, QPropertyAnimation, QEasingCurve, QParallelAnimationGroup, QSequentialAnimationGroup, QPoint, QPointF, QTimer, QThread, pyqtSignal
+import random
 
 def normalize_filename(filename):
     """Normalize the filename by converting to lowercase and removing non-alphanumeric characters except for letters, numbers, and dots."""
@@ -68,12 +69,74 @@ class AnimatedLabel(QLabel):
         except Exception as e:
             print(f"Error updating label: {str(e)}")
 
+class AnimatedButton(QPushButton):
+    def __init__(self, text, parent=None):
+        super().__init__(text, parent)
+        self.pulse_animation = QPropertyAnimation(self, b"geometry")
+        self.pulse_animation.setDuration(1500)
+        self.pulse_animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
+        self.is_pulsing = False
+        
+    def start_pulse(self):
+        if not self.is_pulsing:
+            self.is_pulsing = True
+            rect = self.geometry()
+            self.pulse_animation.setStartValue(rect)
+            self.pulse_animation.setEndValue(rect.adjusted(-2, -2, 2, 2))
+            self.pulse_animation.setLoopCount(-1)  # Infinite loop
+            self.pulse_animation.start()
+            
+    def stop_pulse(self):
+        if self.is_pulsing:
+            self.is_pulsing = False
+            self.pulse_animation.stop()
+            rect = self.geometry()
+            self.setGeometry(rect)
+
+class AnimatedProgressBar(QProgressBar):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setStyleSheet("""
+            QProgressBar {
+                border: 1px solid rgba(255, 255, 255, 180);
+                border-radius: 3px;
+                text-align: center;
+                background: rgba(255, 255, 255, 100);
+            }
+            QProgressBar::chunk {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 rgba(200, 220, 255, 180),
+                    stop:1 rgba(180, 200, 255, 140));
+                border-radius: 2px;
+            }
+        """)
+        self.wave_animation = QPropertyAnimation(self, b"value")
+        self.wave_animation.setDuration(1000)
+        self.wave_animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
+        self.is_waving = False
+        
+    def start_wave(self):
+        if not self.is_waving:
+            self.is_waving = True
+            self.wave_animation.setStartValue(0)
+            self.wave_animation.setEndValue(100)
+            self.wave_animation.setLoopCount(-1)
+            self.wave_animation.start()
+            
+    def stop_wave(self):
+        if self.is_waving:
+            self.is_waving = False
+            self.wave_animation.stop()
+
 class AnimatedListWidget(QListWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setVerticalScrollMode(QListWidget.ScrollMode.ScrollPerPixel)
         self.animation_duration = 150
         self.animations = []
+        self.wave_animation = QPropertyAnimation(self, b"geometry")
+        self.wave_animation.setDuration(500)
+        self.wave_animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
         
     def add_item_with_animation(self, text):
         # Create a simple item without custom widget
@@ -101,6 +164,16 @@ class AnimatedListWidget(QListWidget):
         
         animation.finished.connect(cleanup)
         animation.start()
+        
+        # Add wave effect
+        self.start_wave_effect()
+        
+    def start_wave_effect(self):
+        rect = self.geometry()
+        self.wave_animation.setStartValue(rect)
+        self.wave_animation.setEndValue(rect.adjusted(-2, 0, 2, 0))
+        self.wave_animation.setLoopCount(2)
+        self.wave_animation.start()
 
 class AeroButton(QPushButton):
     """Custom button with authentic Aero glass effect."""
@@ -181,12 +254,111 @@ class AeroButton(QPushButton):
             self.click_animation.start()
         super().mouseReleaseEvent(event)
 
+class SearchWorker(QThread):
+    finished = pyqtSignal(list)
+    error = pyqtSignal(str)
+    progress = pyqtSignal(int, int)  # current, total
+    large_directory = pyqtSignal(int)  # Signal for large directory detection
+    
+    def __init__(self, directory, keyword, indexed_files=None):
+        super().__init__()
+        self.directory = directory
+        self.keyword = keyword
+        self.indexed_files = indexed_files
+        self.is_running = True
+        
+    def stop(self):
+        self.is_running = False
+        
+    def run(self):
+        try:
+            # Check if directory exists and is accessible
+            if not os.path.exists(self.directory):
+                self.error.emit(f"Error: Directory '{self.directory}' does not exist.")
+                return
+                
+            if not os.access(self.directory, os.R_OK):
+                self.error.emit(f"Error: No read permission for directory '{self.directory}'")
+                return
+
+            if self.indexed_files:
+                # Use indexed files if available
+                results = search_files(self.directory, self.keyword, self.indexed_files)
+                self.finished.emit(results)
+            else:
+                # For non-indexed search, count files first
+                total_files = 0
+                try:
+                    for _, _, files in os.walk(self.directory):
+                        total_files += len(files)
+                except Exception as e:
+                    self.error.emit(f"Error counting files: {str(e)}")
+                    return
+                
+                if total_files > 10000:  # Warning threshold
+                    self.large_directory.emit(total_files)
+                    return
+                
+                # Perform search with progress updates
+                results = []
+                processed_files = 0
+                
+                try:
+                    for root, _, files in os.walk(self.directory):
+                        if not self.is_running:
+                            break
+                            
+                        for file in files:
+                            if not self.is_running:
+                                break
+                                
+                            try:
+                                file_path = os.path.join(root, file)
+                                if self.keyword.lower() in file.lower():
+                                    results.append(file_path)
+                                
+                                processed_files += 1
+                                if processed_files % 100 == 0:  # Update progress every 100 files
+                                    self.progress.emit(processed_files, total_files)
+                            except Exception as e:
+                                print(f"Error processing file {file}: {str(e)}")
+                                continue
+                    
+                    self.finished.emit(results)
+                except Exception as e:
+                    self.error.emit(f"Error during file search: {str(e)}")
+                
+        except Exception as e:
+            self.error.emit(f"Unexpected error: {str(e)}")
+            import traceback
+            print("Full error traceback:")
+            print(traceback.format_exc())
+
 class FileSearchWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("File Search - Aero Glass")
         self.setGeometry(100, 100, 600, 600)
         self.setWindowOpacity(0.98)
+        
+        # Circle animation properties
+        self.circles = []
+        self.circle_count = 15
+        self.circle_size = 40
+        self.animation_timer = QTimer(self)
+        self.animation_timer.timeout.connect(self.update_circles)
+        self.animation_timer.start(16)  # ~60 FPS
+        
+        # Initialize circles with random positions and velocities
+        for _ in range(self.circle_count):
+            circle = {
+                'x': random.randint(0, self.width()),
+                'y': random.randint(0, self.height()),
+                'dx': random.uniform(-2, 2),
+                'dy': random.uniform(-2, 2),
+                'size': random.randint(30, 50)
+            }
+            self.circles.append(circle)
         
         # Background widget with frosted glass texture
         self.background_widget = QWidget(self)
@@ -356,11 +528,20 @@ class FileSearchWindow(QMainWindow):
         self.search_label = QLabel("Search Keyword:")
         self.search_input = QLineEdit()
         self.search_input.returnPressed.connect(self.on_search)
-        self.search_btn = AeroButton("Search")
+        self.search_btn = AnimatedButton("Search")
+        self.cancel_btn = AnimatedButton("Cancel")
+        self.cancel_btn.hide()
+        self.cancel_btn.clicked.connect(self.cancel_search)
         search_row.addWidget(self.search_label)
         search_row.addWidget(self.search_input)
         search_row.addWidget(self.search_btn)
+        search_row.addWidget(self.cancel_btn)
         self.layout.addLayout(search_row)
+        
+        # Add progress bar
+        self.progress_bar = AnimatedProgressBar()
+        self.progress_bar.hide()
+        self.layout.addWidget(self.progress_bar)
         
         # Results List
         self.results_list = AnimatedListWidget()
@@ -419,8 +600,27 @@ class FileSearchWindow(QMainWindow):
         self.move_btn.clicked.connect(self.on_move)
         self.delete_btn.clicked.connect(self.on_delete)
 
+    def update_circles(self):
+        """Update circle positions and handle bouncing."""
+        for circle in self.circles:
+            # Update position
+            circle['x'] += circle['dx']
+            circle['y'] += circle['dy']
+            
+            # Bounce off walls
+            if circle['x'] < 0 or circle['x'] > self.width():
+                circle['dx'] *= -1
+            if circle['y'] < 0 or circle['y'] > self.height():
+                circle['dy'] *= -1
+            
+            # Keep circles within bounds
+            circle['x'] = max(0, min(circle['x'], self.width()))
+            circle['y'] = max(0, min(circle['y'], self.height()))
+        
+        self.update()  # Trigger repaint
+
     def paintEvent(self, event):
-        """Custom painting for Aero glass background."""
+        """Custom painting for Aero glass background with animated circles."""
         painter = QPainter(self)
         # Base gradient
         gradient = QLinearGradient(0, 0, 0, self.height())
@@ -428,13 +628,23 @@ class FileSearchWindow(QMainWindow):
         gradient.setColorAt(1, QColor(220, 235, 250, 160))
         painter.fillRect(self.rect(), gradient)
         
-        # Subtle pattern
+        # Animated circles
         painter.setPen(QPen(QColor(255, 255, 255, 15), 1))
-        size = 40
-        for i in range(0, self.width(), size):
-            for j in range(0, self.height(), size):
-                if (i + j) % (size * 2) == 0:
-                    painter.drawEllipse(i, j, size, size)
+        for circle in self.circles:
+            # Create a radial gradient for each circle
+            radial = QRadialGradient(
+                circle['x'], circle['y'], circle['size'],
+                circle['x'], circle['y'], 0
+            )
+            radial.setColorAt(0, QColor(255, 255, 255, 30))
+            radial.setColorAt(1, QColor(255, 255, 255, 0))
+            painter.setBrush(radial)
+            painter.drawEllipse(
+                int(circle['x'] - circle['size']/2),
+                int(circle['y'] - circle['size']/2),
+                int(circle['size']),
+                int(circle['size'])
+            )
         
         # Top glass highlight
         highlight = QLinearGradient(0, 0, 0, 120)
@@ -475,13 +685,77 @@ class FileSearchWindow(QMainWindow):
             self.results_list.clear()
             directory = self.dir_input.text()
             keyword = self.search_input.text()
-            if directory:
-                files_to_search = self.indexed_files if self.indexed_files else None
-                results = search_files(directory, keyword, files_to_search)
-                for item in results:
-                    self.results_list.add_item_with_animation(item)
+            
+            if not directory:
+                QMessageBox.warning(self, "Search Error", "Please enter a directory path")
+                return
+                
+            if not os.path.exists(directory):
+                QMessageBox.warning(self, "Search Error", f"Directory '{directory}' does not exist")
+                return
+                
+            if not os.access(directory, os.R_OK):
+                QMessageBox.warning(self, "Search Error", f"No read permission for directory '{directory}'")
+                return
+                
+            # Start animations
+            self.search_btn.start_pulse()
+            self.search_btn.setEnabled(False)
+            self.search_btn.setText("Searching...")
+            self.progress_bar.setValue(0)
+            self.progress_bar.show()
+            self.progress_bar.start_wave()
+            self.cancel_btn.show()
+            
+            # Create and start search worker
+            self.search_worker = SearchWorker(directory, keyword, self.indexed_files)
+            self.search_worker.finished.connect(self.on_search_complete)
+            self.search_worker.error.connect(self.on_search_error)
+            self.search_worker.progress.connect(self.update_progress)
+            self.search_worker.large_directory.connect(self.handle_large_directory)
+            self.search_worker.start()
+            
         except Exception as e:
             QMessageBox.warning(self, "Search Error", f"An error occurred during search: {str(e)}")
+            import traceback
+            print("Full error traceback:")
+            print(traceback.format_exc())
+            
+    def update_progress(self, current, total):
+        self.progress_bar.setMaximum(total)
+        self.progress_bar.setValue(current)
+            
+    def on_search_complete(self, results):
+        # Stop animations
+        self.search_btn.stop_pulse()
+        self.search_btn.setEnabled(True)
+        self.search_btn.setText("Search")
+        self.progress_bar.stop_wave()
+        self.progress_bar.hide()
+        self.cancel_btn.hide()
+        
+        # Add results to list with animation
+        for item in results:
+            self.results_list.add_item_with_animation(item)
+            
+    def on_search_error(self, error_message):
+        # Stop animations
+        self.search_btn.stop_pulse()
+        self.search_btn.setEnabled(True)
+        self.search_btn.setText("Search")
+        self.progress_bar.stop_wave()
+        self.progress_bar.hide()
+        self.cancel_btn.hide()
+        
+        # Show error message with more details
+        QMessageBox.warning(self, "Search Error", error_message)
+        print(f"Search error: {error_message}")  # Log to console for debugging
+        
+    def cancel_search(self):
+        if hasattr(self, 'search_worker'):
+            self.search_worker.stop()
+            self.search_worker.wait()
+            self.on_search_complete([])
 
     def on_index(self):
         try:
@@ -591,6 +865,82 @@ class FileSearchWindow(QMainWindow):
                     print(f"Error deleting {file_path}: {e}")
             self.on_search()  # Refresh list
             QMessageBox.information(self, "Delete Complete", "Selected files deleted")
+
+    def handle_large_directory(self, total_files):
+        # Re-enable search button and hide progress
+        self.search_btn.setEnabled(True)
+        self.search_btn.setText("Search")
+        self.progress_bar.hide()
+        self.cancel_btn.hide()
+        
+        # Ask user if they want to index the directory
+        reply = QMessageBox.question(
+            self, 
+            "Large Directory Detected",
+            f"This directory contains {total_files} files. Would you like to index it first for better performance?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            # Index the directory
+            self.index_directory(self.dir_input.text())
+        else:
+            # Continue with non-indexed search
+            self.search_worker = SearchWorker(self.dir_input.text(), self.search_input.text())
+            self.search_worker.finished.connect(self.on_search_complete)
+            self.search_worker.error.connect(self.on_search_error)
+            self.search_worker.progress.connect(self.update_progress)
+            self.search_worker.large_directory.connect(self.handle_large_directory)
+            self.search_worker.start()
+            
+    def index_directory(self, directory):
+        try:
+            self.indexed_files = []
+            total_files = 0
+            
+            # Count files first
+            for _, _, files in os.walk(directory):
+                total_files += len(files)
+            
+            # Index files with progress
+            processed_files = 0
+            for root, _, files in os.walk(directory):
+                for file in files:
+                    self.indexed_files.append(os.path.join(root, file))
+                    processed_files += 1
+                    if processed_files % 100 == 0:
+                        self.progress_bar.setValue(int(processed_files * 100 / total_files))
+            
+            self.indexed_directory = directory
+            
+            # Update status label
+            status_text = f"Current index: {len(self.indexed_files)} files from {directory}"
+            self.status_label.setText(status_text)
+            
+            # Ask if user wants to save the index
+            reply = QMessageBox.question(
+                self,
+                "Index Complete",
+                f"Indexed {len(self.indexed_files)} files. Would you like to save this index for future use?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            
+            if reply == QMessageBox.StandardButton.Yes:
+                self.on_save_index()
+            
+            # Hide progress bar
+            self.progress_bar.hide()
+            
+            # Continue with the search using the new index
+            self.search_worker = SearchWorker(directory, self.search_input.text(), self.indexed_files)
+            self.search_worker.finished.connect(self.on_search_complete)
+            self.search_worker.error.connect(self.on_search_error)
+            self.search_worker.progress.connect(self.update_progress)
+            self.search_worker.start()
+            
+        except Exception as e:
+            QMessageBox.warning(self, "Indexing Error", f"An error occurred while indexing: {str(e)}")
+            self.progress_bar.hide()
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
