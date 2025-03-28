@@ -722,24 +722,38 @@ class FileSearchWindow(QMainWindow):
         self.update()  # Trigger repaint
 
     def paintEvent(self, event):
-        """Custom painting for Aero glass background with animated circles."""
+        """Custom painting for futuristic glass and metal interface."""
         painter = QPainter(self)
-        # Base gradient
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        # Futuristic base gradient with metallic tint
         gradient = QLinearGradient(0, 0, 0, self.height())
-        gradient.setColorAt(0, QColor(240, 245, 255, 180))
-        gradient.setColorAt(1, QColor(220, 235, 250, 160))
+        gradient.setColorAt(0, QColor(240, 245, 255, 220))  # Brighter top
+        gradient.setColorAt(0.3, QColor(230, 240, 250, 200))
+        gradient.setColorAt(0.6, QColor(220, 235, 250, 180))
+        gradient.setColorAt(1, QColor(210, 230, 250, 160))
         painter.fillRect(self.rect(), gradient)
         
-        # Animated circles
-        painter.setPen(QPen(QColor(255, 255, 255, 15), 1))
+        # Metallic frame effect
+        frame_gradient = QLinearGradient(0, 0, 0, self.height())
+        frame_gradient.setColorAt(0, QColor(200, 220, 255, 100))
+        frame_gradient.setColorAt(0.5, QColor(180, 200, 255, 80))
+        frame_gradient.setColorAt(1, QColor(160, 180, 255, 60))
+        painter.setPen(QPen(frame_gradient, 2))
+        painter.drawRect(self.rect().adjusted(1, 1, -1, -1))
+        
+        # Animated circles with enhanced glow and metallic effect
+        painter.setPen(QPen(QColor(255, 255, 255, 30), 1))
         for circle in self.circles:
-            # Create a radial gradient for each circle
+            # Create a metallic radial gradient for each circle
             radial = QRadialGradient(
                 circle['x'], circle['y'], circle['size'],
                 circle['x'], circle['y'], 0
             )
-            radial.setColorAt(0, QColor(255, 255, 255, 30))
-            radial.setColorAt(1, QColor(255, 255, 255, 0))
+            radial.setColorAt(0, QColor(255, 255, 255, 60))  # Brighter center
+            radial.setColorAt(0.3, QColor(220, 240, 255, 40))
+            radial.setColorAt(0.6, QColor(200, 220, 255, 20))
+            radial.setColorAt(1, QColor(180, 200, 255, 0))
             painter.setBrush(radial)
             painter.drawEllipse(
                 int(circle['x'] - circle['size']/2),
@@ -748,15 +762,60 @@ class FileSearchWindow(QMainWindow):
                 int(circle['size'])
             )
         
-        # Top glass highlight
-        highlight = QLinearGradient(0, 0, 0, 120)
-        highlight.setColorAt(0, QColor(255, 255, 255, 60))
-        highlight.setColorAt(1, QColor(255, 255, 255, 0))
-        painter.fillRect(QRectF(0, 0, self.width(), 120), highlight)
+        # Enhanced top glass highlight with metallic tint
+        highlight = QLinearGradient(0, 0, 0, 150)
+        highlight.setColorAt(0, QColor(255, 255, 255, 100))  # Brighter highlight
+        highlight.setColorAt(0.3, QColor(220, 240, 255, 80))
+        highlight.setColorAt(0.6, QColor(200, 220, 255, 60))
+        highlight.setColorAt(1, QColor(180, 200, 255, 0))
+        painter.fillRect(QRectF(0, 0, self.width(), 150), highlight)
         
-        # Subtle border
-        painter.setPen(QPen(QColor(255, 255, 255, 100), 1))
-        painter.drawRect(self.rect().adjusted(0, 0, -1, -1))
+        # Futuristic bottom reflection with metallic effect
+        bottom_reflection = QLinearGradient(0, self.height() - 100, 0, self.height())
+        bottom_reflection.setColorAt(0, QColor(180, 200, 255, 0))
+        bottom_reflection.setColorAt(0.7, QColor(160, 180, 255, 30))
+        bottom_reflection.setColorAt(1, QColor(140, 160, 255, 50))
+        painter.fillRect(QRectF(0, self.height() - 100, self.width(), 100), bottom_reflection)
+        
+        # Metallic corner accents
+        corner_size = 30
+        corner_gradient = QRadialGradient(corner_size, corner_size, corner_size, corner_size, corner_size)
+        corner_gradient.setColorAt(0, QColor(200, 220, 255, 80))
+        corner_gradient.setColorAt(0.5, QColor(180, 200, 255, 40))
+        corner_gradient.setColorAt(1, QColor(160, 180, 255, 0))
+        painter.setBrush(corner_gradient)
+        painter.drawEllipse(0, 0, corner_size * 2, corner_size * 2)
+        painter.drawEllipse(self.width() - corner_size * 2, 0, corner_size * 2, corner_size * 2)
+        
+        # Futuristic shine effects
+        shine = QLinearGradient(0, 0, self.width(), 0)
+        shine.setColorAt(0, QColor(255, 255, 255, 0))
+        shine.setColorAt(0.3, QColor(220, 240, 255, 40))
+        shine.setColorAt(0.7, QColor(200, 220, 255, 40))
+        shine.setColorAt(1, QColor(180, 200, 255, 0))
+        painter.fillRect(QRectF(0, 0, self.width(), 3), shine)
+        
+        # Vertical metallic accent
+        v_shine = QLinearGradient(0, 0, 0, self.height())
+        v_shine.setColorAt(0, QColor(200, 220, 255, 0))
+        v_shine.setColorAt(0.3, QColor(180, 200, 255, 30))
+        v_shine.setColorAt(0.7, QColor(160, 180, 255, 30))
+        v_shine.setColorAt(1, QColor(140, 160, 255, 0))
+        painter.fillRect(QRectF(0, 0, 3, self.height()), v_shine)
+        
+        # Futuristic bottom edge
+        bottom_edge = QLinearGradient(0, self.height() - 3, 0, self.height())
+        bottom_edge.setColorAt(0, QColor(180, 200, 255, 60))
+        bottom_edge.setColorAt(1, QColor(160, 180, 255, 80))
+        painter.fillRect(QRectF(0, self.height() - 3, self.width(), 3), bottom_edge)
+        
+        # Add metallic grid lines
+        grid_color = QColor(200, 220, 255, 20)
+        painter.setPen(QPen(grid_color, 1))
+        for x in range(0, self.width(), 20):
+            painter.drawLine(x, 0, x, self.height())
+        for y in range(0, self.height(), 20):
+            painter.drawLine(0, y, self.width(), y)
 
     def load_saved_indexes(self):
         try:
