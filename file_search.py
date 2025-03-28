@@ -5,10 +5,11 @@ import shutil
 import json
 import subprocess
 import platform
+import webbrowser
 from datetime import datetime
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                              QLabel, QLineEdit, QPushButton, QListWidget, QListWidgetItem, QFileDialog, 
-                             QMessageBox, QGraphicsBlurEffect, QGraphicsOpacityEffect, QProgressBar)
+                             QMessageBox, QGraphicsBlurEffect, QGraphicsOpacityEffect, QProgressBar, QMenu)
 from PyQt6.QtGui import (QPainter, QLinearGradient, QColor, QBrush, QFont, QPalette, QPen, QPixmap, QRadialGradient)
 from PyQt6.QtCore import Qt, QRectF, QPropertyAnimation, QEasingCurve, QParallelAnimationGroup, QSequentialAnimationGroup, QPoint, QPointF, QTimer, QThread, pyqtSignal
 import random
@@ -36,22 +37,49 @@ def search_files(directory, keyword, indexed_files=None):
                 results.append(file_path)
     return results
 
-def open_file_explorer(file_path):
-    if platform.system() == 'Windows':
-        subprocess.run(['explorer', '/select,', file_path])
-    elif platform.system() == 'Darwin':
-        subprocess.run(['open', '-R', file_path])
-    elif platform.system() == 'Linux':
-        subprocess.run(['xdg-open', os.path.dirname(file_path)])
-        subprocess.run(['nautilus', '--select', file_path])
-
 def open_file(file_path):
-    if platform.system() == 'Windows':
-        os.startfile(file_path)
-    elif platform.system() == 'Darwin':
-        subprocess.run(['open', file_path])
-    elif platform.system() == 'Linux':
-        subprocess.run(['xdg-open', file_path])
+    """Open a file using the system's default application."""
+    try:
+        # Convert to absolute path
+        abs_path = os.path.abspath(file_path)
+        print(f"Attempting to open file: {abs_path}")
+        
+        if platform.system() == 'Windows':
+            os.startfile(abs_path)
+        elif platform.system() == 'Darwin':
+            subprocess.run(f'open "{abs_path}"', shell=True, env=os.environ)
+        else:  # Linux and others
+            # Try xdg-open with full path
+            subprocess.run(f'xdg-open "{abs_path}"', shell=True, env=os.environ)
+        
+        print("File open command executed")
+    except Exception as e:
+        print(f"Error opening file: {str(e)}")
+        import traceback
+        print("Full error traceback:")
+        print(traceback.format_exc())
+
+def open_file_explorer(file_path):
+    """Open the file's containing folder in the system's file manager."""
+    try:
+        # Convert to absolute path
+        abs_path = os.path.abspath(file_path)
+        dir_path = os.path.dirname(abs_path)
+        print(f"Attempting to open folder: {dir_path}")
+        
+        if platform.system() == 'Windows':
+            subprocess.run(f'explorer /select,"{abs_path}"', shell=True, env=os.environ)
+        elif platform.system() == 'Darwin':
+            subprocess.run(f'open -R "{abs_path}"', shell=True, env=os.environ)
+        else:  # Linux and others
+            subprocess.run(f'xdg-open "{dir_path}"', shell=True, env=os.environ)
+        
+        print("Folder open command executed")
+    except Exception as e:
+        print(f"Error opening file explorer: {str(e)}")
+        import traceback
+        print("Full error traceback:")
+        print(traceback.format_exc())
 
 class AnimatedLabel(QLabel):
     def __init__(self, text, parent=None):
@@ -68,112 +96,6 @@ class AnimatedLabel(QLabel):
             self.setText(new_text)
         except Exception as e:
             print(f"Error updating label: {str(e)}")
-
-class AnimatedButton(QPushButton):
-    def __init__(self, text, parent=None):
-        super().__init__(text, parent)
-        self.pulse_animation = QPropertyAnimation(self, b"geometry")
-        self.pulse_animation.setDuration(1500)
-        self.pulse_animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
-        self.is_pulsing = False
-        
-    def start_pulse(self):
-        if not self.is_pulsing:
-            self.is_pulsing = True
-            rect = self.geometry()
-            self.pulse_animation.setStartValue(rect)
-            self.pulse_animation.setEndValue(rect.adjusted(-2, -2, 2, 2))
-            self.pulse_animation.setLoopCount(-1)  # Infinite loop
-            self.pulse_animation.start()
-            
-    def stop_pulse(self):
-        if self.is_pulsing:
-            self.is_pulsing = False
-            self.pulse_animation.stop()
-            rect = self.geometry()
-            self.setGeometry(rect)
-
-class AnimatedProgressBar(QProgressBar):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setStyleSheet("""
-            QProgressBar {
-                border: 1px solid rgba(255, 255, 255, 180);
-                border-radius: 3px;
-                text-align: center;
-                background: rgba(255, 255, 255, 100);
-            }
-            QProgressBar::chunk {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(200, 220, 255, 180),
-                    stop:1 rgba(180, 200, 255, 140));
-                border-radius: 2px;
-            }
-        """)
-        self.wave_animation = QPropertyAnimation(self, b"value")
-        self.wave_animation.setDuration(1000)
-        self.wave_animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
-        self.is_waving = False
-        
-    def start_wave(self):
-        if not self.is_waving:
-            self.is_waving = True
-            self.wave_animation.setStartValue(0)
-            self.wave_animation.setEndValue(100)
-            self.wave_animation.setLoopCount(-1)
-            self.wave_animation.start()
-            
-    def stop_wave(self):
-        if self.is_waving:
-            self.is_waving = False
-            self.wave_animation.stop()
-
-class AnimatedListWidget(QListWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setVerticalScrollMode(QListWidget.ScrollMode.ScrollPerPixel)
-        self.animation_duration = 150
-        self.animations = []
-        self.wave_animation = QPropertyAnimation(self, b"geometry")
-        self.wave_animation.setDuration(500)
-        self.wave_animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
-        
-    def add_item_with_animation(self, text):
-        # Create a simple item without custom widget
-        item = QListWidgetItem(text)
-        self.addItem(item)
-        
-        # Create opacity effect for the item
-        effect = QGraphicsOpacityEffect(self)
-        item.setData(Qt.ItemDataRole.UserRole, effect)
-        effect.setOpacity(0.0)
-        
-        # Create and configure the animation
-        animation = QPropertyAnimation(effect, b"opacity")
-        animation.setDuration(self.animation_duration)
-        animation.setStartValue(0.0)
-        animation.setEndValue(1.0)
-        animation.setEasingCurve(QEasingCurve.Type.OutQuad)
-        
-        # Keep reference to prevent garbage collection
-        self.animations.append((animation, item))
-        
-        def cleanup():
-            if (animation, item) in self.animations:
-                self.animations.remove((animation, item))
-        
-        animation.finished.connect(cleanup)
-        animation.start()
-        
-        # Add wave effect
-        self.start_wave_effect()
-        
-    def start_wave_effect(self):
-        rect = self.geometry()
-        self.wave_animation.setStartValue(rect)
-        self.wave_animation.setEndValue(rect.adjusted(-2, 0, 2, 0))
-        self.wave_animation.setLoopCount(2)
-        self.wave_animation.start()
 
 class AeroButton(QPushButton):
     """Custom button with authentic Aero glass effect."""
@@ -253,6 +175,137 @@ class AeroButton(QPushButton):
             self.click_animation.setEndValue(rect.adjusted(-1, -1, 1, 1))
             self.click_animation.start()
         super().mouseReleaseEvent(event)
+
+class AnimatedButton(AeroButton):
+    def __init__(self, text, parent=None):
+        super().__init__(text, parent)
+        self.pulse_animation = QPropertyAnimation(self, b"geometry")
+        self.pulse_animation.setDuration(1500)
+        self.pulse_animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
+        self.is_pulsing = False
+        
+    def start_pulse(self):
+        if not self.is_pulsing:
+            self.is_pulsing = True
+            rect = self.geometry()
+            self.pulse_animation.setStartValue(rect)
+            self.pulse_animation.setEndValue(rect.adjusted(-2, -2, 2, 2))
+            self.pulse_animation.setLoopCount(-1)  # Infinite loop
+            self.pulse_animation.start()
+            
+    def stop_pulse(self):
+        if self.is_pulsing:
+            self.is_pulsing = False
+            self.pulse_animation.stop()
+            rect = self.geometry()
+            self.setGeometry(rect)
+
+class AnimatedProgressBar(QProgressBar):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setStyleSheet("""
+            QProgressBar {
+                border: 1px solid rgba(255, 255, 255, 180);
+                border-radius: 3px;
+                text-align: center;
+                background: rgba(255, 255, 255, 100);
+            }
+            QProgressBar::chunk {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 rgba(200, 220, 255, 180),
+                    stop:1 rgba(180, 200, 255, 140));
+                border-radius: 2px;
+            }
+        """)
+        self.wave_animation = QPropertyAnimation(self, b"value")
+        self.wave_animation.setDuration(1000)
+        self.wave_animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
+        self.is_waving = False
+        
+    def start_wave(self):
+        if not self.is_waving:
+            self.is_waving = True
+            self.wave_animation.setStartValue(0)
+            self.wave_animation.setEndValue(100)
+            self.wave_animation.setLoopCount(-1)
+            self.wave_animation.start()
+            
+    def stop_wave(self):
+        if self.is_waving:
+            self.is_waving = False
+            self.wave_animation.stop()
+            self.setValue(100)  # Set to 100% when stopping
+            self.hide()  # Hide the progress bar immediately
+
+class AnimatedListWidget(QListWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setVerticalScrollMode(QListWidget.ScrollMode.ScrollPerPixel)
+        self.animation_duration = 800  # Longer duration for more magical effect
+        self.animations = []
+        self.item_delay = 50  # Longer delay between items for more dramatic effect
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.customContextMenuRequested.connect(self.show_context_menu)
+        
+    def show_context_menu(self, position):
+        item = self.itemAt(position)
+        if item:
+            # Get the widget from the item
+            widget = self.itemWidget(item)
+            # Get the label from the widget's layout
+            label = widget.findChild(QLabel)
+            if label:
+                file_path = label.text()
+                menu = QMenu()
+                open_action = menu.addAction("Open")
+                show_in_folder_action = menu.addAction("Show in File Manager")
+                
+                action = menu.exec(self.mapToGlobal(position))
+                if action == open_action:
+                    open_file(file_path)
+                elif action == show_in_folder_action:
+                    open_file_explorer(file_path)
+        
+    def add_item_with_animation(self, text):
+        # Create a widget to hold the text
+        widget = QWidget()
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(5, 2, 5, 2)
+        label = QLabel(text)
+        layout.addWidget(label)
+        
+        # Create opacity effect for the widget
+        effect = QGraphicsOpacityEffect(widget)
+        widget.setGraphicsEffect(effect)
+        effect.setOpacity(0.0)
+        
+        # Create and configure the animation
+        animation = QPropertyAnimation(effect, b"opacity")
+        animation.setDuration(self.animation_duration)
+        animation.setStartValue(0.0)
+        animation.setEndValue(1.0)
+        animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        
+        # Calculate delay based on item position, ensure it's not negative
+        delay = max(0, (self.count() - 1) * self.item_delay)
+        
+        # Create list item and set the widget
+        item = QListWidgetItem()
+        item.setSizeHint(widget.sizeHint())
+        self.addItem(item)
+        self.setItemWidget(item, widget)
+        
+        # Keep reference to prevent garbage collection
+        self.animations.append((animation, widget, item))
+        
+        def cleanup():
+            if (animation, widget, item) in self.animations:
+                self.animations.remove((animation, widget, item))
+        
+        animation.finished.connect(cleanup)
+        
+        # Start animation after delay
+        QTimer.singleShot(delay, lambda: animation.start())
 
 class SearchWorker(QThread):
     finished = pyqtSignal(list)
@@ -530,12 +583,14 @@ class FileSearchWindow(QMainWindow):
         self.search_input.returnPressed.connect(self.on_search)
         self.search_btn = AnimatedButton("Search")
         self.cancel_btn = AnimatedButton("Cancel")
-        self.cancel_btn.hide()
+        self.cancel_btn.setVisible(False)
+        self.cancel_btn.setFixedWidth(60)  # Set fixed width to prevent layout issues
         self.cancel_btn.clicked.connect(self.cancel_search)
         search_row.addWidget(self.search_label)
         search_row.addWidget(self.search_input)
         search_row.addWidget(self.search_btn)
         search_row.addWidget(self.cancel_btn)
+        search_row.addStretch()  # Add stretch to push buttons to the left
         self.layout.addLayout(search_row)
         
         # Add progress bar
@@ -599,6 +654,53 @@ class FileSearchWindow(QMainWindow):
         self.copy_btn.clicked.connect(self.on_copy)
         self.move_btn.clicked.connect(self.on_move)
         self.delete_btn.clicked.connect(self.on_delete)
+
+        # Add Aero glass style to message boxes
+        self.setStyleSheet(self.styleSheet() + """
+            QMessageBox {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 rgba(255, 255, 255, 180),
+                    stop:0.3 rgba(220, 240, 255, 140),
+                    stop:0.6 rgba(200, 230, 255, 120),
+                    stop:1 rgba(180, 220, 255, 100));
+                border: 1px solid rgba(255, 255, 255, 180);
+                border-radius: 3px;
+            }
+            QMessageBox QLabel {
+                color: rgba(0, 0, 0, 180);
+                background: transparent;
+            }
+            QMessageBox QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 rgba(255, 255, 255, 180),
+                    stop:0.3 rgba(220, 240, 255, 140),
+                    stop:0.6 rgba(200, 230, 255, 120),
+                    stop:1 rgba(180, 220, 255, 100));
+                border: 1px solid rgba(255, 255, 255, 180);
+                border-radius: 3px;
+                padding: 6px;
+                color: rgba(0, 0, 0, 180);
+                font-weight: bold;
+                min-height: 20px;
+            }
+            QMessageBox QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 rgba(255, 255, 255, 220),
+                    stop:0.3 rgba(230, 245, 255, 180),
+                    stop:0.6 rgba(210, 235, 255, 160),
+                    stop:1 rgba(190, 225, 255, 140));
+                border: 1px solid rgba(255, 255, 255, 220);
+            }
+            QMessageBox QPushButton:pressed {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 rgba(180, 220, 255, 100),
+                    stop:0.3 rgba(200, 230, 255, 120),
+                    stop:0.6 rgba(220, 240, 255, 140),
+                    stop:1 rgba(255, 255, 255, 180));
+                padding-top: 7px;
+                padding-bottom: 5px;
+            }
+        """)
 
     def update_circles(self):
         """Update circle positions and handle bouncing."""
@@ -705,7 +807,7 @@ class FileSearchWindow(QMainWindow):
             self.progress_bar.setValue(0)
             self.progress_bar.show()
             self.progress_bar.start_wave()
-            self.cancel_btn.show()
+            self.cancel_btn.setVisible(True)
             
             # Create and start search worker
             self.search_worker = SearchWorker(directory, keyword, self.indexed_files)
@@ -726,26 +828,27 @@ class FileSearchWindow(QMainWindow):
         self.progress_bar.setValue(current)
             
     def on_search_complete(self, results):
-        # Stop animations
+        # Stop the wave animation and hide progress bar immediately
+        self.progress_bar.stop_wave()
+        
+        # Stop animations and reset UI
         self.search_btn.stop_pulse()
         self.search_btn.setEnabled(True)
         self.search_btn.setText("Search")
-        self.progress_bar.stop_wave()
-        self.progress_bar.hide()
-        self.cancel_btn.hide()
+        self.cancel_btn.setVisible(False)
         
-        # Add results to list with animation
+        # Clear and add results to list with animation
+        self.results_list.clear()  # Clear any existing items
         for item in results:
             self.results_list.add_item_with_animation(item)
-            
+
     def on_search_error(self, error_message):
-        # Stop animations
+        # Stop animations and reset UI
         self.search_btn.stop_pulse()
         self.search_btn.setEnabled(True)
         self.search_btn.setText("Search")
-        self.progress_bar.stop_wave()
-        self.progress_bar.hide()
-        self.cancel_btn.hide()
+        self.progress_bar.stop_wave()  # This will also hide the progress bar
+        self.cancel_btn.setVisible(False)
         
         # Show error message with more details
         QMessageBox.warning(self, "Search Error", error_message)
@@ -820,9 +923,13 @@ class FileSearchWindow(QMainWindow):
             self.dir_input.setText(directory)
 
     def on_select(self, item):
-        file_path = item.text()
-        open_file(file_path)
-        open_file_explorer(file_path)
+        # Get the widget from the item
+        widget = self.results_list.itemWidget(item)
+        # Get the label from the widget's layout
+        label = widget.findChild(QLabel)
+        if label:
+            file_path = label.text()
+            open_file(file_path)
 
     def on_select_all(self):
         for i in range(self.results_list.count()):
@@ -871,7 +978,7 @@ class FileSearchWindow(QMainWindow):
         self.search_btn.setEnabled(True)
         self.search_btn.setText("Search")
         self.progress_bar.hide()
-        self.cancel_btn.hide()
+        self.cancel_btn.setVisible(False)
         
         # Ask user if they want to index the directory
         reply = QMessageBox.question(
