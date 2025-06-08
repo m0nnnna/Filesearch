@@ -402,19 +402,326 @@ class FileSearchWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("File Search - Frosted Glass")
-        self.setGeometry(100, 100, 600, 600)
-        self.setWindowOpacity(0.95)  # Slightly more transparent
+        self.setGeometry(100, 100, 500, 500)
+        self.setWindowOpacity(0.95)
         
         # Initialize UI elements first
         self.central_widget = QWidget(self)
         self.setCentralWidget(self.central_widget)
         self.layout = QVBoxLayout(self.central_widget)
-        self.layout.setContentsMargins(20, 20, 20, 20)
-        self.layout.setSpacing(15)
+        self.layout.setContentsMargins(10, 10, 10, 10)
+        self.layout.setSpacing(8)
         
-        # Add Help Button
+        # Directory Row
+        dir_row = QHBoxLayout()
+        dir_row.setSpacing(4)
+        self.dir_label = QLabel("Directory:")
+        self.dir_label.setStyleSheet("color: rgba(0, 0, 0, 180);")
+        self.dir_input = QLineEdit()
+        self.browse_btn = AeroButton("Browse")
+        self.index_btn = AeroButton("Reindex")
+        
+        # Set fixed widths and styles for directory buttons
+        for btn in [self.browse_btn, self.index_btn]:
+            btn.setFixedWidth(60)
+            btn.setFixedHeight(20)
+            btn.setStyleSheet("""
+                QPushButton {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+                        stop:0 rgba(255, 255, 255, 180),
+                        stop:0.3 rgba(220, 240, 255, 140),
+                        stop:0.6 rgba(200, 230, 255, 120),
+                        stop:1 rgba(180, 220, 255, 100));
+                    border: 1px solid rgba(255, 255, 255, 180);
+                    border-radius: 3px;
+                    padding: 4px;
+                    color: rgba(0, 0, 0, 180);
+                    font-weight: bold;
+                    font-size: 10px;
+                }
+                QPushButton:hover {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                        stop:0 rgba(255, 255, 255, 220),
+                        stop:0.3 rgba(230, 245, 255, 180),
+                        stop:0.6 rgba(210, 235, 255, 160),
+                        stop:1 rgba(190, 225, 255, 140));
+                    border: 1px solid rgba(255, 255, 255, 220);
+                }
+            """)
+        
+        # Connect directory buttons
+        self.browse_btn.clicked.connect(self.on_browse)
+        self.index_btn.clicked.connect(self.on_index)
+        
+        dir_row.addWidget(self.dir_label)
+        dir_row.addWidget(self.dir_input)
+        dir_row.addWidget(self.browse_btn)
+        dir_row.addWidget(self.index_btn)
+        self.layout.addLayout(dir_row)
+        
+        # Status Label
+        self.status_label = AnimatedLabel("No index loaded")
+        self.status_label.setStyleSheet("""
+            QLabel {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 rgba(200, 220, 255, 160),
+                    stop:0.3 rgba(180, 210, 255, 140),
+                    stop:0.6 rgba(160, 200, 255, 120),
+                    stop:1 rgba(140, 190, 255, 100));
+                padding: 4px;
+                border-radius: 3px;
+                border: 1px solid rgba(255, 255, 255, 180);
+                color: rgba(0, 0, 0, 200);
+                font-weight: bold;
+                font-size: 10px;
+            }
+        """)
+        self.layout.addWidget(self.status_label)
+        
+        # Search Row
+        search_row = QHBoxLayout()
+        search_row.setSpacing(4)
+        self.search_label = QLabel("Search:")
+        self.search_label.setStyleSheet("color: rgba(0, 0, 0, 180);")
+        self.search_input = QLineEdit()
+        self.search_input.returnPressed.connect(self.on_search)  # Add Enter key functionality
+        self.search_btn = AnimatedButton("Search")
+        self.search_btn.setFixedWidth(60)
+        self.search_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+                    stop:0 rgba(255, 255, 255, 180),
+                    stop:0.3 rgba(220, 240, 255, 140),
+                    stop:0.6 rgba(200, 230, 255, 120),
+                    stop:1 rgba(180, 220, 255, 100));
+                border: 1px solid rgba(255, 255, 255, 180);
+                border-radius: 3px;
+                padding: 4px;
+                color: rgba(0, 0, 0, 180);
+                font-weight: bold;
+                font-size: 10px;
+                min-height: 20px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 rgba(255, 255, 255, 220),
+                    stop:0.3 rgba(230, 245, 255, 180),
+                    stop:0.6 rgba(210, 235, 255, 160),
+                    stop:1 rgba(190, 225, 255, 140));
+                border: 1px solid rgba(255, 255, 255, 220);
+            }
+        """)
+        self.cancel_btn = AnimatedButton("Cancel")
+        self.cancel_btn.setFixedWidth(60)
+        self.cancel_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+                    stop:0 rgba(255, 255, 255, 180),
+                    stop:0.3 rgba(220, 240, 255, 140),
+                    stop:0.6 rgba(200, 230, 255, 120),
+                    stop:1 rgba(180, 220, 255, 100));
+                border: 1px solid rgba(255, 255, 255, 180);
+                border-radius: 3px;
+                padding: 4px;
+                color: rgba(0, 0, 0, 180);
+                font-weight: bold;
+                font-size: 10px;
+                min-height: 20px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 rgba(255, 255, 255, 220),
+                    stop:0.3 rgba(230, 245, 255, 180),
+                    stop:0.6 rgba(210, 235, 255, 160),
+                    stop:1 rgba(190, 225, 255, 140));
+                border: 1px solid rgba(255, 255, 255, 220);
+            }
+        """)
+        self.cancel_btn.setVisible(False)
+        search_row.addWidget(self.search_label)
+        search_row.addWidget(self.search_input)
+        search_row.addWidget(self.search_btn)
+        search_row.addWidget(self.cancel_btn)
+        self.layout.addLayout(search_row)
+        
+        # Add progress bar
+        self.progress_bar = AnimatedProgressBar()
+        self.progress_bar.setFixedHeight(4)
+        self.progress_bar.hide()
+        self.layout.addWidget(self.progress_bar)
+        
+        # Results List
+        self.results_list = AnimatedListWidget()
+        self.results_list.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
+        self.results_list.itemDoubleClicked.connect(self.on_select)
+        self.results_list.setStyleSheet("""
+            QListWidget {
+                background: rgba(60, 64, 72, 120);
+                border: 1px solid rgba(255, 255, 255, 180);
+                border-radius: 3px;
+                color: rgba(0, 0, 0, 180);
+            }
+            QWidget {
+                background: transparent;
+            }
+            QLabel {
+                color: rgba(0, 0, 0, 180);
+                padding: 1px;
+                font-size: 11px;
+            }
+            QListWidget::item {
+                background: transparent;
+                border-radius: 2px;
+                padding: 2px;
+            }
+            QListWidget::item:selected {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 rgba(200, 220, 255, 180),
+                    stop:1 rgba(180, 200, 255, 140));
+            }
+            QListWidget::item:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 rgba(220, 240, 255, 180),
+                    stop:1 rgba(200, 230, 255, 140));
+            }
+            /* Custom Scrollbar Styling */
+            QScrollBar:vertical {
+                border: none;
+                background: rgba(60, 64, 72, 40);
+                width: 8px;
+                margin: 0px;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:vertical {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 rgba(100, 104, 112, 180),
+                    stop:0.5 rgba(80, 84, 92, 160),
+                    stop:1 rgba(60, 64, 72, 180));
+                min-height: 20px;
+                border-radius: 4px;
+                border: 1px solid rgba(255, 255, 255, 180);
+            }
+            QScrollBar::handle:vertical:hover {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 rgba(120, 124, 132, 200),
+                    stop:0.5 rgba(100, 104, 112, 180),
+                    stop:1 rgba(80, 84, 92, 200));
+            }
+            QScrollBar::handle:vertical:pressed {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 rgba(80, 84, 92, 160),
+                    stop:0.5 rgba(60, 64, 72, 140),
+                    stop:1 rgba(40, 44, 52, 160));
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+            }
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+                background: none;
+            }
+            QScrollBar:horizontal {
+                border: none;
+                background: rgba(60, 64, 72, 40);
+                height: 8px;
+                margin: 0px;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:horizontal {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 rgba(100, 104, 112, 180),
+                    stop:0.5 rgba(80, 84, 92, 160),
+                    stop:1 rgba(60, 64, 72, 180));
+                min-width: 20px;
+                border-radius: 4px;
+                border: 1px solid rgba(255, 255, 255, 180);
+            }
+            QScrollBar::handle:horizontal:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 rgba(120, 124, 132, 200),
+                    stop:0.5 rgba(100, 104, 112, 180),
+                    stop:1 rgba(80, 84, 92, 200));
+            }
+            QScrollBar::handle:horizontal:pressed {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 rgba(80, 84, 92, 160),
+                    stop:0.5 rgba(60, 64, 72, 140),
+                    stop:1 rgba(40, 44, 52, 160));
+            }
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+                width: 0px;
+            }
+            QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+                background: none;
+            }
+        """)
+        self.layout.addWidget(self.results_list)
+        
+        # Action Buttons
+        action_row = QHBoxLayout()
+        action_row.setSpacing(4)
+        self.select_all_btn = AeroButton("Select All")
+        self.copy_btn = AeroButton("Copy")
+        self.move_btn = AeroButton("Move")
+        self.delete_btn = AeroButton("Delete")
         self.help_btn = AeroButton("?")
-        self.help_btn.setFixedSize(30, 30)  # Make it square
+        
+        # Set fixed widths and styles for action buttons
+        for btn in [self.copy_btn, self.move_btn, self.delete_btn]:
+            btn.setFixedWidth(60)
+            btn.setStyleSheet("""
+                QPushButton {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+                        stop:0 rgba(255, 255, 255, 180),
+                        stop:0.3 rgba(220, 240, 255, 140),
+                        stop:0.6 rgba(200, 230, 255, 120),
+                        stop:1 rgba(180, 220, 255, 100));
+                    border: 1px solid rgba(255, 255, 255, 180);
+                    border-radius: 3px;
+                    padding: 4px;
+                    color: rgba(0, 0, 0, 180);
+                    font-weight: bold;
+                    font-size: 10px;
+                    min-height: 20px;
+                }
+                QPushButton:hover {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                        stop:0 rgba(255, 255, 255, 220),
+                        stop:0.3 rgba(230, 245, 255, 180),
+                        stop:0.6 rgba(210, 235, 255, 160),
+                        stop:1 rgba(190, 225, 255, 140));
+                    border: 1px solid rgba(255, 255, 255, 220);
+                }
+            """)
+        
+        # Special styling for Select All button with smaller text
+        self.select_all_btn.setFixedWidth(70)  # Slightly wider for the text
+        self.select_all_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+                    stop:0 rgba(255, 255, 255, 180),
+                    stop:0.3 rgba(220, 240, 255, 140),
+                    stop:0.6 rgba(200, 230, 255, 120),
+                    stop:1 rgba(180, 220, 255, 100));
+                border: 1px solid rgba(255, 255, 255, 180);
+                border-radius: 3px;
+                padding: 4px;
+                color: rgba(0, 0, 0, 180);
+                font-weight: bold;
+                font-size: 9px;
+                min-height: 20px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 rgba(255, 255, 255, 220),
+                    stop:0.3 rgba(230, 245, 255, 180),
+                    stop:0.6 rgba(210, 235, 255, 160),
+                    stop:1 rgba(190, 225, 255, 140));
+                border: 1px solid rgba(255, 255, 255, 220);
+            }
+        """)
+        
+        # Help button styling
+        self.help_btn.setFixedSize(24, 24)
         self.help_btn.setStyleSheet("""
             QPushButton {
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
@@ -423,11 +730,11 @@ class FileSearchWindow(QMainWindow):
                     stop:0.6 rgba(200, 230, 255, 120),
                     stop:1 rgba(180, 220, 255, 100));
                 border: 1px solid rgba(255, 255, 255, 180);
-                border-radius: 15px;
+                border-radius: 12px;
                 padding: 0px;
                 color: rgba(0, 0, 0, 180);
                 font-weight: bold;
-                font-size: 16px;
+                font-size: 14px;
             }
             QPushButton:hover {
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
@@ -440,24 +747,21 @@ class FileSearchWindow(QMainWindow):
         """)
         self.help_btn.clicked.connect(self.show_help)
         
-        # Create a horizontal layout for the help button
-        help_layout = QHBoxLayout()
-        help_layout.addStretch()  # Push button to the right
-        help_layout.addWidget(self.help_btn)
-        self.layout.addLayout(help_layout)
+        # Connect action buttons
+        self.select_all_btn.clicked.connect(self.on_select_all)
+        self.copy_btn.clicked.connect(self.on_copy)
+        self.move_btn.clicked.connect(self.on_move)
+        self.delete_btn.clicked.connect(self.on_delete)
+        self.search_btn.clicked.connect(self.on_search)
+        self.cancel_btn.clicked.connect(self.cancel_search)
         
-        # Directory Row
-        dir_row = QHBoxLayout()
-        self.dir_label = QLabel("Directory Path:")
-        self.dir_label.setStyleSheet("color: rgba(0, 0, 0, 180);")  # Set label color to black
-        self.dir_input = QLineEdit()
-        self.browse_btn = AeroButton("Browse")
-        self.index_btn = AeroButton("Reindex")
-        dir_row.addWidget(self.dir_label)
-        dir_row.addWidget(self.dir_input)
-        dir_row.addWidget(self.browse_btn)
-        dir_row.addWidget(self.index_btn)
-        self.layout.addLayout(dir_row)
+        action_row.addWidget(self.select_all_btn)
+        action_row.addWidget(self.copy_btn)
+        action_row.addWidget(self.move_btn)
+        action_row.addWidget(self.delete_btn)
+        action_row.addStretch()  # Add stretch to push help button to the right
+        action_row.addWidget(self.help_btn)
+        self.layout.addLayout(action_row)
         
         # Initialize indexing data after UI elements
         self.index_file = 'file_index.json'
@@ -485,225 +789,6 @@ class FileSearchWindow(QMainWindow):
             
         # Load index after UI is initialized
         self.load_index()
-        
-        # Status Label
-        self.status_label = AnimatedLabel("No index loaded")
-        self.status_label.setStyleSheet("""
-            QLabel {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(200, 220, 255, 160),
-                    stop:0.3 rgba(180, 210, 255, 140),
-                    stop:0.6 rgba(160, 200, 255, 120),
-                    stop:1 rgba(140, 190, 255, 100));
-                padding: 8px;
-                border-radius: 3px;
-                border: 1px solid rgba(255, 255, 255, 180);
-                color: rgba(0, 0, 0, 200);
-                font-weight: bold;
-                font-size: 11px;
-            }
-        """)
-        self.layout.addWidget(self.status_label)  # Add the label directly
-        
-        # Add a glass highlight effect to the status label
-        highlight = QGraphicsBlurEffect()
-        highlight.setBlurRadius(1)
-        self.status_label.setGraphicsEffect(highlight)
-        
-        # Search Row
-        search_row = QHBoxLayout()
-        self.search_label = QLabel("Search Keyword:")
-        self.search_label.setStyleSheet("color: rgba(0, 0, 0, 180);")  # Set label color to black
-        self.search_input = QLineEdit()
-        self.search_input.returnPressed.connect(self.on_search)
-        self.search_btn = AnimatedButton("Search")
-        self.cancel_btn = AnimatedButton("Cancel")
-        self.cancel_btn.setVisible(False)
-        self.cancel_btn.setFixedWidth(60)  # Set fixed width to prevent layout issues
-        self.cancel_btn.clicked.connect(self.cancel_search)
-        search_row.addWidget(self.search_label)
-        search_row.addWidget(self.search_input)
-        search_row.addWidget(self.search_btn)
-        search_row.addWidget(self.cancel_btn)
-        search_row.addStretch()  # Add stretch to push buttons to the left
-        self.layout.addLayout(search_row)
-        
-        # Add progress bar
-        self.progress_bar = AnimatedProgressBar()
-        self.progress_bar.hide()
-        self.layout.addWidget(self.progress_bar)
-        
-        # Results List
-        self.results_list = AnimatedListWidget()
-        self.results_list.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
-        self.results_list.itemDoubleClicked.connect(self.on_select)
-        self.results_list.setStyleSheet("""
-            QListWidget {
-                background: rgba(60, 64, 72, 120);
-                border: 1px solid rgba(255, 255, 255, 180);
-                border-radius: 3px;
-                color: rgba(0, 0, 0, 180);
-            }
-            QWidget {
-                background: transparent;
-            }
-            QLabel {
-                color: rgba(0, 0, 0, 180);
-                padding: 2px;
-            }
-            QListWidget::item {
-                background: transparent;
-                border-radius: 2px;
-            }
-            QListWidget::item:selected {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(200, 220, 255, 180),
-                    stop:1 rgba(180, 200, 255, 140));
-            }
-            QListWidget::item:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(220, 240, 255, 180),
-                    stop:1 rgba(200, 230, 255, 140));
-            }
-            /* Custom Scrollbar Styling */
-            QScrollBar:vertical {
-                border: none;
-                background: rgba(60, 64, 72, 40);
-                width: 12px;
-                margin: 0px;
-                border-radius: 6px;
-            }
-            QScrollBar::handle:vertical {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 rgba(100, 104, 112, 180),
-                    stop:0.5 rgba(80, 84, 92, 160),
-                    stop:1 rgba(60, 64, 72, 180));
-                min-height: 20px;
-                border-radius: 6px;
-                border: 1px solid rgba(255, 255, 255, 180);
-            }
-            QScrollBar::handle:vertical:hover {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 rgba(120, 124, 132, 200),
-                    stop:0.5 rgba(100, 104, 112, 180),
-                    stop:1 rgba(80, 84, 92, 200));
-            }
-            QScrollBar::handle:vertical:pressed {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 rgba(80, 84, 92, 160),
-                    stop:0.5 rgba(60, 64, 72, 140),
-                    stop:1 rgba(40, 44, 52, 160));
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                height: 0px;
-            }
-            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
-                background: none;
-            }
-            QScrollBar:horizontal {
-                border: none;
-                background: rgba(60, 64, 72, 40);
-                height: 12px;
-                margin: 0px;
-                border-radius: 6px;
-            }
-            QScrollBar::handle:horizontal {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(100, 104, 112, 180),
-                    stop:0.5 rgba(80, 84, 92, 160),
-                    stop:1 rgba(60, 64, 72, 180));
-                min-width: 20px;
-                border-radius: 6px;
-                border: 1px solid rgba(255, 255, 255, 180);
-            }
-            QScrollBar::handle:horizontal:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(120, 124, 132, 200),
-                    stop:0.5 rgba(100, 104, 112, 180),
-                    stop:1 rgba(80, 84, 92, 200));
-            }
-            QScrollBar::handle:horizontal:pressed {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(80, 84, 92, 160),
-                    stop:0.5 rgba(60, 64, 72, 140),
-                    stop:1 rgba(40, 44, 52, 160));
-            }
-            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
-                width: 0px;
-            }
-            QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
-                background: none;
-            }
-        """)
-        self.layout.addWidget(self.results_list)
-        
-        # Action Buttons
-        action_row = QHBoxLayout()
-        self.select_all_btn = AeroButton("Select All")
-        self.copy_btn = AeroButton("Copy")
-        self.move_btn = AeroButton("Move")
-        self.delete_btn = AeroButton("Delete")
-        action_row.addWidget(self.select_all_btn)
-        action_row.addWidget(self.copy_btn)
-        action_row.addWidget(self.move_btn)
-        action_row.addWidget(self.delete_btn)
-        self.layout.addLayout(action_row)
-        
-        # Connect buttons
-        self.browse_btn.clicked.connect(self.on_browse)
-        self.index_btn.clicked.connect(self.on_index)
-        self.search_btn.clicked.connect(self.on_search)
-        self.select_all_btn.clicked.connect(self.on_select_all)
-        self.copy_btn.clicked.connect(self.on_copy)
-        self.move_btn.clicked.connect(self.on_move)
-        self.delete_btn.clicked.connect(self.on_delete)
-
-        # Add Aero glass style to message boxes
-        self.setStyleSheet(self.styleSheet() + """
-            QMessageBox {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(255, 255, 255, 180),
-                    stop:0.3 rgba(220, 240, 255, 140),
-                    stop:0.6 rgba(200, 230, 255, 120),
-                    stop:1 rgba(180, 220, 255, 100));
-                border: 1px solid rgba(255, 255, 255, 180);
-                border-radius: 3px;
-            }
-            QMessageBox QLabel {
-                color: rgba(0, 0, 0, 180);
-                background: transparent;
-            }
-            QMessageBox QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(255, 255, 255, 180),
-                    stop:0.3 rgba(220, 240, 255, 140),
-                    stop:0.6 rgba(200, 230, 255, 120),
-                    stop:1 rgba(180, 220, 255, 100));
-                border: 1px solid rgba(255, 255, 255, 180);
-                border-radius: 3px;
-                padding: 6px;
-                color: rgba(0, 0, 0, 180);
-                font-weight: bold;
-                min-height: 20px;
-            }
-            QMessageBox QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(255, 255, 255, 220),
-                    stop:0.3 rgba(230, 245, 255, 180),
-                    stop:0.6 rgba(210, 235, 255, 160),
-                    stop:1 rgba(190, 225, 255, 140));
-                border: 1px solid rgba(255, 255, 255, 220);
-            }
-            QMessageBox QPushButton:pressed {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(180, 220, 255, 100),
-                    stop:0.3 rgba(200, 230, 255, 120),
-                    stop:0.6 rgba(220, 240, 255, 140),
-                    stop:1 rgba(255, 255, 255, 180));
-                padding-top: 7px;
-                padding-bottom: 5px;
-            }
-        """)
 
     def update_snowflakes(self):
         """Update snowflake positions and handle falling animation."""
