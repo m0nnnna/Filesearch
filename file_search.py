@@ -11,8 +11,9 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QH
                              QLabel, QLineEdit, QPushButton, QListWidget, QListWidgetItem, QFileDialog, 
                              QMessageBox, QGraphicsBlurEffect, QGraphicsOpacityEffect, QProgressBar, QMenu)
 from PyQt6.QtGui import (QPainter, QLinearGradient, QColor, QBrush, QFont, QPalette, QPen, QPixmap, QRadialGradient)
-from PyQt6.QtCore import Qt, QRectF, QPropertyAnimation, QEasingCurve, QParallelAnimationGroup, QSequentialAnimationGroup, QPoint, QPointF, QTimer, QThread, pyqtSignal
+from PyQt6.QtCore import Qt, QRectF, QPropertyAnimation, QEasingCurve, QParallelAnimationGroup, QSequentialAnimationGroup, QPoint, QPointF, QTimer, QThread, pyqtSignal, QSize
 import random
+import math
 
 def normalize_filename(filename):
     """Normalize the filename by converting to lowercase and removing non-alphanumeric characters except for letters, numbers, and dots."""
@@ -270,8 +271,15 @@ class AnimatedListWidget(QListWidget):
         # Create a widget to hold the text
         widget = QWidget()
         layout = QHBoxLayout(widget)
-        layout.setContentsMargins(5, 2, 5, 2)
+        layout.setContentsMargins(8, 4, 8, 4)  # Increased padding
         label = QLabel(text)
+        label.setStyleSheet("""
+            QLabel {
+                color: rgba(0, 0, 0, 180);
+                padding: 2px;
+                font-size: 12px;
+            }
+        """)
         layout.addWidget(label)
         
         # Create opacity effect for the widget
@@ -292,6 +300,9 @@ class AnimatedListWidget(QListWidget):
         # Create list item and set the widget
         item = QListWidgetItem()
         item.setSizeHint(widget.sizeHint())
+        # Add extra height to the item
+        size_hint = item.sizeHint()
+        item.setSizeHint(QSize(size_hint.width(), size_hint.height() + 8))  # Add 8 pixels of height
         self.addItem(item)
         self.setItemWidget(item, widget)
         
@@ -390,167 +401,90 @@ class SearchWorker(QThread):
 class FileSearchWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("File Search - Aero Glass")
+        self.setWindowTitle("File Search - Frosted Glass")
         self.setGeometry(100, 100, 600, 600)
-        self.setWindowOpacity(0.98)
+        self.setWindowOpacity(0.95)  # Slightly more transparent
         
-        # Circle animation properties
-        self.circles = []
-        self.circle_count = 15
-        self.circle_size = 40
-        self.animation_timer = QTimer(self)
-        self.animation_timer.timeout.connect(self.update_circles)
-        self.animation_timer.start(16)  # ~60 FPS
-        
-        # Initialize circles with random positions and velocities
-        for _ in range(self.circle_count):
-            circle = {
-                'x': random.randint(0, self.width()),
-                'y': random.randint(0, self.height()),
-                'dx': random.uniform(-2, 2),
-                'dy': random.uniform(-2, 2),
-                'size': random.randint(30, 50)
-            }
-            self.circles.append(circle)
-        
-        # Background widget with frosted glass texture
-        self.background_widget = QWidget(self)
-        self.background_widget.setGeometry(0, 0, 600, 600)
-        blur = QGraphicsBlurEffect()
-        blur.setBlurRadius(10)
-        self.background_widget.setGraphicsEffect(blur)
-        self.background_widget.setAutoFillBackground(True)
-        palette = self.background_widget.palette()
-        palette.setBrush(QPalette.ColorRole.Window, QBrush(QColor(230, 240, 250, 160)))
-        self.background_widget.setPalette(palette)
-        
-        # Main widget and layout (foreground)
+        # Initialize UI elements first
         self.central_widget = QWidget(self)
         self.setCentralWidget(self.central_widget)
         self.layout = QVBoxLayout(self.central_widget)
         self.layout.setContentsMargins(20, 20, 20, 20)
         self.layout.setSpacing(15)
         
-        # Styling: Aero glass theme
-        self.setStyleSheet("""
-            QMainWindow { background: transparent; }
-            QWidget { 
-                background: transparent; 
-                color: rgba(0, 0, 0, 180); 
-                font-family: Segoe UI; 
-                font-size: 12px; 
-            }
-            QLineEdit { 
-                background: rgba(255, 255, 255, 140); 
-                border: 1px solid rgba(255, 255, 255, 180); 
-                border-radius: 3px; 
-                padding: 5px; 
-                color: rgba(0, 0, 0, 180); 
-            }
-            QListWidget { 
-                background: rgba(255, 255, 255, 120); 
-                border: 1px solid rgba(255, 255, 255, 180); 
-                border-radius: 3px; 
-                color: rgba(0, 0, 0, 180); 
-            }
-            QListWidget::item:hover { 
-                background: rgba(220, 240, 255, 140); 
-            }
-            QLabel { 
+        # Add Help Button
+        self.help_btn = AeroButton("?")
+        self.help_btn.setFixedSize(30, 30)  # Make it square
+        self.help_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+                    stop:0 rgba(255, 255, 255, 180),
+                    stop:0.3 rgba(220, 240, 255, 140),
+                    stop:0.6 rgba(200, 230, 255, 120),
+                    stop:1 rgba(180, 220, 255, 100));
+                border: 1px solid rgba(255, 255, 255, 180);
+                border-radius: 15px;
+                padding: 0px;
                 color: rgba(0, 0, 0, 180);
                 font-weight: bold;
+                font-size: 16px;
             }
-            QScrollBar:vertical {
-                border: none;
-                background: rgba(255, 255, 255, 40);
-                width: 12px;
-                margin: 0px;
-                border-radius: 6px;
-            }
-            QScrollBar::handle:vertical {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 rgba(200, 220, 255, 180),
-                    stop:0.5 rgba(180, 200, 255, 160),
-                    stop:1 rgba(160, 180, 255, 180));
-                min-height: 20px;
-                border-radius: 6px;
-                border: 1px solid rgba(255, 255, 255, 180);
-            }
-            QScrollBar::handle:vertical:hover {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 rgba(220, 235, 255, 200),
-                    stop:0.5 rgba(200, 220, 255, 180),
-                    stop:1 rgba(180, 200, 255, 200));
-            }
-            QScrollBar::handle:vertical:pressed {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 rgba(180, 200, 255, 160),
-                    stop:0.5 rgba(160, 180, 255, 140),
-                    stop:1 rgba(140, 160, 255, 160));
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                height: 0px;
-            }
-            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
-                background: none;
-            }
-            QScrollBar:horizontal {
-                border: none;
-                background: rgba(255, 255, 255, 40);
-                height: 12px;
-                margin: 0px;
-                border-radius: 6px;
-            }
-            QScrollBar::handle:horizontal {
+            QPushButton:hover {
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(200, 220, 255, 180),
-                    stop:0.5 rgba(180, 200, 255, 160),
-                    stop:1 rgba(160, 180, 255, 180));
-                min-width: 20px;
-                border-radius: 6px;
-                border: 1px solid rgba(255, 255, 255, 180);
-            }
-            QScrollBar::handle:horizontal:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(220, 235, 255, 200),
-                    stop:0.5 rgba(200, 220, 255, 180),
-                    stop:1 rgba(180, 200, 255, 200));
-            }
-            QScrollBar::handle:horizontal:pressed {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(180, 200, 255, 160),
-                    stop:0.5 rgba(160, 180, 255, 140),
-                    stop:1 rgba(140, 160, 255, 160));
-            }
-            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
-                width: 0px;
-            }
-            QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
-                background: none;
+                    stop:0 rgba(255, 255, 255, 220),
+                    stop:0.3 rgba(230, 245, 255, 180),
+                    stop:0.6 rgba(210, 235, 255, 160),
+                    stop:1 rgba(190, 225, 255, 140));
+                border: 1px solid rgba(255, 255, 255, 220);
             }
         """)
+        self.help_btn.clicked.connect(self.show_help)
         
-        # Data
-        self.indexed_files = []
-        self.indexed_directory = None
-        self.saved_indexes = {}
-        self.load_saved_indexes()
+        # Create a horizontal layout for the help button
+        help_layout = QHBoxLayout()
+        help_layout.addStretch()  # Push button to the right
+        help_layout.addWidget(self.help_btn)
+        self.layout.addLayout(help_layout)
         
         # Directory Row
         dir_row = QHBoxLayout()
         self.dir_label = QLabel("Directory Path:")
+        self.dir_label.setStyleSheet("color: rgba(0, 0, 0, 180);")  # Set label color to black
         self.dir_input = QLineEdit()
         self.browse_btn = AeroButton("Browse")
-        self.index_btn = AeroButton("Index")
-        self.save_btn = AeroButton("Save Index")
-        self.load_btn = AeroButton("Load Index")
+        self.index_btn = AeroButton("Reindex")
         dir_row.addWidget(self.dir_label)
         dir_row.addWidget(self.dir_input)
         dir_row.addWidget(self.browse_btn)
         dir_row.addWidget(self.index_btn)
-        dir_row.addWidget(self.save_btn)
-        dir_row.addWidget(self.load_btn)
         self.layout.addLayout(dir_row)
+        
+        # Initialize indexing data after UI elements
+        self.index_file = 'file_index.json'
+        self.indexed_files = []
+        self.indexed_directory = None
+        
+        # Snowflake animation properties
+        self.snowflakes = []
+        self.snowflake_count = 50  # More snowflakes for better effect
+        self.animation_timer = QTimer(self)
+        self.animation_timer.timeout.connect(self.update_snowflakes)
+        self.animation_timer.start(16)  # ~60 FPS
+        
+        # Initialize snowflakes with random positions and velocities
+        for _ in range(self.snowflake_count):
+            snowflake = {
+                'x': random.randint(0, self.width()),
+                'y': random.randint(-100, 0),  # Start above the window
+                'size': random.randint(2, 6),  # Smaller sizes for snowflakes
+                'speed': random.uniform(1, 3),  # Falling speed
+                'sway': random.uniform(-1, 1),  # Sideways movement
+                'sway_speed': random.uniform(0.02, 0.05)  # Speed of swaying
+            }
+            self.snowflakes.append(snowflake)
+            
+        # Load index after UI is initialized
+        self.load_index()
         
         # Status Label
         self.status_label = AnimatedLabel("No index loaded")
@@ -579,6 +513,7 @@ class FileSearchWindow(QMainWindow):
         # Search Row
         search_row = QHBoxLayout()
         self.search_label = QLabel("Search Keyword:")
+        self.search_label.setStyleSheet("color: rgba(0, 0, 0, 180);")  # Set label color to black
         self.search_input = QLineEdit()
         self.search_input.returnPressed.connect(self.on_search)
         self.search_btn = AnimatedButton("Search")
@@ -600,10 +535,11 @@ class FileSearchWindow(QMainWindow):
         
         # Results List
         self.results_list = AnimatedListWidget()
+        self.results_list.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
         self.results_list.itemDoubleClicked.connect(self.on_select)
         self.results_list.setStyleSheet("""
             QListWidget {
-                background: rgba(255, 255, 255, 120);
+                background: rgba(60, 64, 72, 120);
                 border: 1px solid rgba(255, 255, 255, 180);
                 border-radius: 3px;
                 color: rgba(0, 0, 0, 180);
@@ -629,6 +565,75 @@ class FileSearchWindow(QMainWindow):
                     stop:0 rgba(220, 240, 255, 180),
                     stop:1 rgba(200, 230, 255, 140));
             }
+            /* Custom Scrollbar Styling */
+            QScrollBar:vertical {
+                border: none;
+                background: rgba(60, 64, 72, 40);
+                width: 12px;
+                margin: 0px;
+                border-radius: 6px;
+            }
+            QScrollBar::handle:vertical {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 rgba(100, 104, 112, 180),
+                    stop:0.5 rgba(80, 84, 92, 160),
+                    stop:1 rgba(60, 64, 72, 180));
+                min-height: 20px;
+                border-radius: 6px;
+                border: 1px solid rgba(255, 255, 255, 180);
+            }
+            QScrollBar::handle:vertical:hover {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 rgba(120, 124, 132, 200),
+                    stop:0.5 rgba(100, 104, 112, 180),
+                    stop:1 rgba(80, 84, 92, 200));
+            }
+            QScrollBar::handle:vertical:pressed {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 rgba(80, 84, 92, 160),
+                    stop:0.5 rgba(60, 64, 72, 140),
+                    stop:1 rgba(40, 44, 52, 160));
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+            }
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+                background: none;
+            }
+            QScrollBar:horizontal {
+                border: none;
+                background: rgba(60, 64, 72, 40);
+                height: 12px;
+                margin: 0px;
+                border-radius: 6px;
+            }
+            QScrollBar::handle:horizontal {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 rgba(100, 104, 112, 180),
+                    stop:0.5 rgba(80, 84, 92, 160),
+                    stop:1 rgba(60, 64, 72, 180));
+                min-width: 20px;
+                border-radius: 6px;
+                border: 1px solid rgba(255, 255, 255, 180);
+            }
+            QScrollBar::handle:horizontal:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 rgba(120, 124, 132, 200),
+                    stop:0.5 rgba(100, 104, 112, 180),
+                    stop:1 rgba(80, 84, 92, 200));
+            }
+            QScrollBar::handle:horizontal:pressed {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 rgba(80, 84, 92, 160),
+                    stop:0.5 rgba(60, 64, 72, 140),
+                    stop:1 rgba(40, 44, 52, 160));
+            }
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+                width: 0px;
+            }
+            QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+                background: none;
+            }
         """)
         self.layout.addWidget(self.results_list)
         
@@ -647,8 +652,6 @@ class FileSearchWindow(QMainWindow):
         # Connect buttons
         self.browse_btn.clicked.connect(self.on_browse)
         self.index_btn.clicked.connect(self.on_index)
-        self.save_btn.clicked.connect(self.on_save_index)
-        self.load_btn.clicked.connect(self.on_load_index)
         self.search_btn.clicked.connect(self.on_search)
         self.select_all_btn.clicked.connect(self.on_select_all)
         self.copy_btn.clicked.connect(self.on_copy)
@@ -702,22 +705,17 @@ class FileSearchWindow(QMainWindow):
             }
         """)
 
-    def update_circles(self):
-        """Update circle positions and handle bouncing."""
-        for circle in self.circles:
+    def update_snowflakes(self):
+        """Update snowflake positions and handle falling animation."""
+        for snowflake in self.snowflakes:
             # Update position
-            circle['x'] += circle['dx']
-            circle['y'] += circle['dy']
+            snowflake['y'] += snowflake['speed']
+            snowflake['x'] += snowflake['sway'] * math.sin(snowflake['y'] * snowflake['sway_speed'])
             
-            # Bounce off walls
-            if circle['x'] < 0 or circle['x'] > self.width():
-                circle['dx'] *= -1
-            if circle['y'] < 0 or circle['y'] > self.height():
-                circle['dy'] *= -1
-            
-            # Keep circles within bounds
-            circle['x'] = max(0, min(circle['x'], self.width()))
-            circle['y'] = max(0, min(circle['y'], self.height()))
+            # Reset snowflake when it goes below the window
+            if snowflake['y'] > self.height():
+                snowflake['y'] = random.randint(-100, 0)
+                snowflake['x'] = random.randint(0, self.width())
         
         self.update()  # Trigger repaint
 
@@ -742,25 +740,23 @@ class FileSearchWindow(QMainWindow):
         painter.setPen(QPen(frame_gradient, 2))
         painter.drawRect(self.rect().adjusted(1, 1, -1, -1))
         
-        # Animated circles with enhanced glow and metallic effect
-        painter.setPen(QPen(QColor(255, 255, 255, 30), 1))
-        for circle in self.circles:
-            # Create a metallic radial gradient for each circle
-            radial = QRadialGradient(
-                circle['x'], circle['y'], circle['size'],
-                circle['x'], circle['y'], 0
-            )
-            radial.setColorAt(0, QColor(255, 255, 255, 60))  # Brighter center
-            radial.setColorAt(0.3, QColor(220, 240, 255, 40))
-            radial.setColorAt(0.6, QColor(200, 220, 255, 20))
-            radial.setColorAt(1, QColor(180, 200, 255, 0))
-            painter.setBrush(radial)
-            painter.drawEllipse(
-                int(circle['x'] - circle['size']/2),
-                int(circle['y'] - circle['size']/2),
-                int(circle['size']),
-                int(circle['size'])
-            )
+        # Draw snowflakes
+        painter.setPen(QPen(QColor(255, 255, 255, 180), 1))
+        for snowflake in self.snowflakes:
+            # Draw a simple snowflake shape
+            x, y = int(snowflake['x']), int(snowflake['y'])
+            size = int(snowflake['size'])
+            
+            # Main snowflake body
+            painter.drawLine(x, y - size, x, y + size)
+            painter.drawLine(x - size, y, x + size, y)
+            
+            # Diagonal lines
+            painter.drawLine(x - size//2, y - size//2, x + size//2, y + size//2)
+            painter.drawLine(x - size//2, y + size//2, x + size//2, y - size//2)
+            
+            # Add some sparkle
+            painter.drawPoint(x, y)
         
         # Enhanced top glass highlight with metallic tint
         highlight = QLinearGradient(0, 0, 0, 150)
@@ -808,38 +804,35 @@ class FileSearchWindow(QMainWindow):
         bottom_edge.setColorAt(0, QColor(180, 200, 255, 60))
         bottom_edge.setColorAt(1, QColor(160, 180, 255, 80))
         painter.fillRect(QRectF(0, self.height() - 3, self.width(), 3), bottom_edge)
-        
-        # Add metallic grid lines
-        grid_color = QColor(200, 220, 255, 20)
-        painter.setPen(QPen(grid_color, 1))
-        for x in range(0, self.width(), 20):
-            painter.drawLine(x, 0, x, self.height())
-        for y in range(0, self.height(), 20):
-            painter.drawLine(0, y, self.width(), y)
 
-    def load_saved_indexes(self):
+    def load_index(self):
+        """Load the index from the JSON file if it exists."""
         try:
-            # For loading, we might want to prompt the user if no default file exists
-            if os.path.exists('file_indexes.json'):
-                with open('file_indexes.json', 'r', encoding='utf-8') as f:
-                    self.saved_indexes = json.load(f)
-            else:
-                self.saved_indexes = {}
-        except FileNotFoundError:
-            self.saved_indexes = {}
+            if os.path.exists(self.index_file):
+                with open(self.index_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    self.indexed_files = data.get('files', [])
+                    self.indexed_directory = data.get('directory', None)
+                    if self.indexed_directory:
+                        self.dir_input.setText(self.indexed_directory)
+                        self.status_label.setText(f"Loaded index: {len(self.indexed_files)} files")
         except Exception as e:
-            print(f"Error loading indexes: {str(e)}")
-            self.saved_indexes = {}
+            print(f"Error loading index: {str(e)}")
+            self.indexed_files = []
+            self.indexed_directory = None
 
-
-    def save_indexes_to_file(self, filepath):
+    def save_index(self):
+        """Save the current index to the JSON file."""
         try:
-            with open(filepath, 'w', encoding='utf-8') as f:
-                json.dump(self.saved_indexes, f, ensure_ascii=False)
-        except PermissionError:
-            raise Exception("Permission denied. Try running the app with elevated privileges or choose a different save location.")
+            data = {
+                'directory': self.indexed_directory,
+                'files': self.indexed_files,
+                'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+            with open(self.index_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            raise Exception(f"Error writing to file: {str(e)}")
+            print(f"Error saving index: {str(e)}")
 
     def on_search(self):
         try:
@@ -858,6 +851,10 @@ class FileSearchWindow(QMainWindow):
             if not os.access(directory, os.R_OK):
                 QMessageBox.warning(self, "Search Error", f"No read permission for directory '{directory}'")
                 return
+            
+            # Auto-index if directory changed
+            if directory != self.indexed_directory:
+                self.index_directory(directory)
                 
             # Start animations
             self.search_btn.start_pulse()
@@ -920,66 +917,20 @@ class FileSearchWindow(QMainWindow):
             self.on_search_complete([])
 
     def on_index(self):
-        try:
-            directory = self.dir_input.text()
-            if directory and os.path.isdir(directory):
-                self.indexed_files = []
-                for root, _, files in os.walk(directory):
-                    for file in files:
-                        self.indexed_files.append(os.path.join(root, file))
-                self.indexed_directory = directory
-                
-                # Update status label without animation
-                status_text = f"Current index: {len(self.indexed_files)} files from {directory}"
-                self.status_label.setText(status_text)
-                
-                QMessageBox.information(self, "Indexing Complete", f"Indexed {len(self.indexed_files)} files")
-        except Exception as e:
-            QMessageBox.warning(self, "Indexing Error", f"An error occurred while indexing: {str(e)}")
-
-    def on_save_index(self):
-        if not self.indexed_files or not self.indexed_directory:
-            QMessageBox.warning(self, "Error", "Please create an index first")
-            return
-        try:
-            # Use QFileDialog to get a proper file path
-            name, ok = QFileDialog.getSaveFileName(self, "Save Index", "file_indexes.json", "JSON Files (*.json)")
-            if not (ok and name):
-                return  # User canceled or no name provided
-        
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            self.saved_indexes[name] = {  # Use the full path as the key
-                'directory': self.indexed_directory,
-                'files': self.indexed_files,
-                'timestamp': timestamp
-            }
-            self.save_indexes_to_file(name)  # Pass the chosen file path
-            QMessageBox.information(self, "Save Complete", f"Index saved to '{name}'")
-        except Exception as e:
-            QMessageBox.critical(self, "Save Error", f"Failed to save index: {str(e)}")
-            print(f"Save error: {str(e)}")
-
-    def on_load_index(self):
-        if not self.saved_indexes:
-            QMessageBox.warning(self, "Error", "No saved indexes available")
-            return
-        items = [f"{name} ({data['timestamp']}) - {data['directory']}" 
-                 for name, data in self.saved_indexes.items()]
-        item, ok = QComboBox(self).showPopup() or (items[0], True)  # Simplified for example
-        if ok:
-            index_name = item.split(' (')[0]
-            self.indexed_files = self.saved_indexes[index_name]['files']
-            self.indexed_directory = self.saved_indexes[index_name]['directory']
-            self.dir_input.setText(self.indexed_directory)
-            self.status_label.animate_text_change(
-                f"Loaded index '{index_name}': {len(self.indexed_files)} files"
-            )
-            QMessageBox.information(self, "Load Complete", f"Loaded index '{index_name}' with {len(self.indexed_files)} files")
+        """Reindex the current directory."""
+        directory = self.dir_input.text()
+        if directory and os.path.isdir(directory):
+            self.index_directory(directory)
+        else:
+            QMessageBox.warning(self, "Error", "Please select a valid directory first")
 
     def on_browse(self):
         directory = QFileDialog.getExistingDirectory(self, "Choose a directory")
         if directory:
             self.dir_input.setText(directory)
+            # Auto-index the directory if it's different from the current one
+            if directory != self.indexed_directory:
+                self.index_directory(directory)
 
     def on_select(self, item):
         # Get the widget from the item
@@ -991,46 +942,65 @@ class FileSearchWindow(QMainWindow):
             open_file(file_path)
 
     def on_select_all(self):
+        self.results_list.selectAll()  # Use the built-in selectAll method
+
+    def get_selected_files(self):
+        """Get the file paths of selected items."""
+        selected_files = []
         for i in range(self.results_list.count()):
-            self.results_list.item(i).setSelected(True)
+            item = self.results_list.item(i)
+            if item.isSelected():
+                widget = self.results_list.itemWidget(item)
+                label = widget.findChild(QLabel)
+                if label:
+                    selected_files.append(label.text())
+        return selected_files
 
     def on_copy(self):
-        selected = [self.results_list.item(i).text() for i in range(self.results_list.count()) if self.results_list.item(i).isSelected()]
+        selected = self.get_selected_files()
         if selected:
             dest_dir = QFileDialog.getExistingDirectory(self, "Choose destination directory")
             if dest_dir:
-                for source in selected:
-                    dest = os.path.join(dest_dir, os.path.basename(source))
-                    if not os.path.exists(dest):
-                        shutil.copy2(source, dest_dir)
-                QMessageBox.information(self, "Copy Complete", f"Files copied to {dest_dir}")
+                try:
+                    for source in selected:
+                        dest = os.path.join(dest_dir, os.path.basename(source))
+                        if not os.path.exists(dest):
+                            shutil.copy2(source, dest_dir)
+                    QMessageBox.information(self, "Copy Complete", f"Files copied to {dest_dir}")
+                except Exception as e:
+                    QMessageBox.warning(self, "Copy Error", f"Error copying files: {str(e)}")
 
     def on_move(self):
-        selected = [self.results_list.item(i).text() for i in range(self.results_list.count()) if self.results_list.item(i).isSelected()]
+        selected = self.get_selected_files()
         if selected:
             dest_dir = QFileDialog.getExistingDirectory(self, "Choose destination directory")
             if dest_dir:
-                for source in selected:
-                    dest = os.path.join(dest_dir, os.path.basename(source))
-                    if not os.path.exists(dest):
-                        shutil.move(source, dest_dir)
-                        if source in self.indexed_files:
-                            self.indexed_files[self.indexed_files.index(source)] = dest
-                self.on_search()  # Refresh list
-                QMessageBox.information(self, "Move Complete", f"Files moved to {dest_dir}")
+                try:
+                    for source in selected:
+                        dest = os.path.join(dest_dir, os.path.basename(source))
+                        if not os.path.exists(dest):
+                            shutil.move(source, dest_dir)
+                            if source in self.indexed_files:
+                                self.indexed_files.remove(source)
+                    self.save_index()  # Save the updated index
+                    self.on_search()  # Refresh list
+                    QMessageBox.information(self, "Move Complete", f"Files moved to {dest_dir}")
+                except Exception as e:
+                    QMessageBox.warning(self, "Move Error", f"Error moving files: {str(e)}")
 
     def on_delete(self):
-        selected = [self.results_list.item(i).text() for i in range(self.results_list.count()) if self.results_list.item(i).isSelected()]
+        selected = self.get_selected_files()
         if selected and QMessageBox.question(self, "Confirm Delete", "Are you sure?") == QMessageBox.StandardButton.Yes:
-            for file_path in selected:
-                try:
+            try:
+                for file_path in selected:
                     os.remove(file_path)
                     if file_path in self.indexed_files:
                         self.indexed_files.remove(file_path)
-                except Exception as e:
-                    print(f"Error deleting {file_path}: {e}")
-            self.on_search()  # Refresh list
-            QMessageBox.information(self, "Delete Complete", "Selected files deleted")
+                self.save_index()  # Save the updated index
+                self.on_search()  # Refresh list
+                QMessageBox.information(self, "Delete Complete", "Selected files deleted")
+            except Exception as e:
+                QMessageBox.warning(self, "Delete Error", f"Error deleting files: {str(e)}")
 
     def handle_large_directory(self, total_files):
         # Re-enable search button and hide progress
@@ -1060,16 +1030,21 @@ class FileSearchWindow(QMainWindow):
             self.search_worker.start()
             
     def index_directory(self, directory):
+        """Index the directory and save to JSON file."""
         try:
-            self.indexed_files = []
-            total_files = 0
+            self.progress_bar.setValue(0)
+            self.progress_bar.show()
+            self.progress_bar.start_wave()
             
-            # Count files first
+            # Count total files first
+            total_files = 0
             for _, _, files in os.walk(directory):
                 total_files += len(files)
             
             # Index files with progress
+            self.indexed_files = []
             processed_files = 0
+            
             for root, _, files in os.walk(directory):
                 for file in files:
                     self.indexed_files.append(os.path.join(root, file))
@@ -1078,35 +1053,84 @@ class FileSearchWindow(QMainWindow):
                         self.progress_bar.setValue(int(processed_files * 100 / total_files))
             
             self.indexed_directory = directory
+            self.save_index()
             
-            # Update status label
-            status_text = f"Current index: {len(self.indexed_files)} files from {directory}"
-            self.status_label.setText(status_text)
-            
-            # Ask if user wants to save the index
-            reply = QMessageBox.question(
-                self,
-                "Index Complete",
-                f"Indexed {len(self.indexed_files)} files. Would you like to save this index for future use?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-            )
-            
-            if reply == QMessageBox.StandardButton.Yes:
-                self.on_save_index()
-            
-            # Hide progress bar
+            # Update status
+            self.status_label.setText(f"Indexed {len(self.indexed_files)} files")
+            self.progress_bar.stop_wave()
             self.progress_bar.hide()
-            
-            # Continue with the search using the new index
-            self.search_worker = SearchWorker(directory, self.search_input.text(), self.indexed_files)
-            self.search_worker.finished.connect(self.on_search_complete)
-            self.search_worker.error.connect(self.on_search_error)
-            self.search_worker.progress.connect(self.update_progress)
-            self.search_worker.start()
             
         except Exception as e:
             QMessageBox.warning(self, "Indexing Error", f"An error occurred while indexing: {str(e)}")
+            self.progress_bar.stop_wave()
             self.progress_bar.hide()
+
+    def show_help(self):
+        """Show help message with GitHub link."""
+        help_text = """
+        <h3>File Search Help</h3>
+        <p>This application helps you search through your files with a beautiful frosted glass interface.</p>
+        
+        <h4>Features:</h4>
+        <ul>
+            <li>Search files by name or extension</li>
+            <li>Auto-indexing for faster searches</li>
+            <li>Copy, move, and delete files</li>
+            <li>Beautiful frosted glass UI with snow animation</li>
+        </ul>
+        
+        <h4>How to use:</h4>
+        <ol>
+            <li>Select a directory to search in</li>
+            <li>Enter your search term</li>
+            <li>Use the buttons to manage your files</li>
+        </ol>
+        
+        <p>For more information, visit the project on GitHub:<br>
+        <a href="https://github.com/m0nnnna/Filesearch">https://github.com/m0nnnna/Filesearch</a></p>
+        """
+        
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Help")
+        msg.setTextFormat(Qt.TextFormat.RichText)
+        msg.setText(help_text)
+        msg.setStyleSheet("""
+            QMessageBox {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 rgba(255, 255, 255, 180),
+                    stop:0.3 rgba(220, 240, 255, 140),
+                    stop:0.6 rgba(200, 230, 255, 120),
+                    stop:1 rgba(180, 220, 255, 100));
+                border: 1px solid rgba(255, 255, 255, 180);
+                border-radius: 3px;
+            }
+            QMessageBox QLabel {
+                color: rgba(0, 0, 0, 180);
+                background: transparent;
+            }
+            QMessageBox QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 rgba(255, 255, 255, 180),
+                    stop:0.3 rgba(220, 240, 255, 140),
+                    stop:0.6 rgba(200, 230, 255, 120),
+                    stop:1 rgba(180, 220, 255, 100));
+                border: 1px solid rgba(255, 255, 255, 180);
+                border-radius: 3px;
+                padding: 6px;
+                color: rgba(0, 0, 0, 180);
+                font-weight: bold;
+                min-height: 20px;
+            }
+            QMessageBox QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 rgba(255, 255, 255, 220),
+                    stop:0.3 rgba(230, 245, 255, 180),
+                    stop:0.6 rgba(210, 235, 255, 160),
+                    stop:1 rgba(190, 225, 255, 140));
+                border: 1px solid rgba(255, 255, 255, 220);
+            }
+        """)
+        msg.exec()
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
